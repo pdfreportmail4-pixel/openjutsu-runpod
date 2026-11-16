@@ -24,6 +24,7 @@ sed -i 's/\r$//' /opt/scripts/*.sh && chmod +x /opt/scripts/*.sh
 
 if [[ -f /opt/.installed ]]; then
   log "already installed, starting services"
+  MODE=models bash /opt/scripts/provision_video_stack.sh > /opt/logs/provision_models.log 2>&1 &
   exec /opt/scripts/start.sh
 fi
 
@@ -47,6 +48,8 @@ log "2/5 model download starts in the background"
 python3 -m venv /opt/hf-venv
 /opt/hf-venv/bin/pip install -q huggingface_hub
 PATH="/opt/hf-venv/bin:$PATH" /opt/scripts/models_bg.sh
+# extra stacks chosen with STACKS (Viggle-Animate, Wan Animate 2, ...): models, in the background
+MODE=models bash /opt/scripts/provision_video_stack.sh > /opt/logs/provision_models.log 2>&1 &
 
 log "3/5 PyTorch (CUDA 13.0) + ComfyUI requirements"
 python3 -m venv /opt/venv
@@ -62,6 +65,9 @@ log "4/5 custom nodes"
 if ! SKIP_IMPORT_TEST=1 bash /opt/scripts/install_nodes.sh > /opt/logs/nodes_install.log 2>&1; then
   tail -n 40 /opt/logs/nodes_install.log; fail "custom node install failed (see above)"
 fi
+# extra node packs for the stacks chosen with STACKS; a failure here does not stop the setup
+MODE=nodes COMFY_PYTHON=/opt/venv/bin/python bash /opt/scripts/provision_video_stack.sh > /opt/logs/provision_nodes.log 2>&1 \
+  || log "extra node packs failed (see /opt/logs/provision_nodes.log)"
 
 log "5/5 comfy-api-proxy + OpenJutsu"
 [[ -d /opt/openjutsu/.git ]] || { rm -rf /opt/openjutsu; git clone --filter=blob:none --quiet https://github.com/D3voz/openjutsu.git /opt/openjutsu; }
